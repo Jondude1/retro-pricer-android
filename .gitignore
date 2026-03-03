@@ -1,0 +1,32 @@
+# Built outputs
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+
+# Build directories
+build/
+app/build/
+
+# Gradle
+.gradle/
+local.properties
+gradle.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+captures/
+
+# Keystore / secrets
+*.jks
+*.keystore
+*.p12
+
+# IDE / local tools
+.claude/
+
+# Android OS
+Thumbs.db
