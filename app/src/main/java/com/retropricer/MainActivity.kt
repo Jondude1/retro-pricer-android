@@ -57,12 +57,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // ── Permission launcher ────────────────────────────────────────────────
+    // ── Permission launchers ───────────────────────────────────────────────
     private val requestCameraPermission = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) Toast.makeText(this, "Camera permission needed for game scanning", Toast.LENGTH_SHORT).show()
     }
+
+    private val requestLocationPermission = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* WebView geolocation callback handles the result */ }
 
     // ── File chooser launcher (handles camera + gallery) ──────────────────
     private val fileChooserLauncher = registerForActivityResult(
@@ -117,6 +121,11 @@ class MainActivity : AppCompatActivity() {
             requestCameraPermission.launch(Manifest.permission.CAMERA)
         }
 
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+            != PackageManager.PERMISSION_GRANTED) {
+            requestLocationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+
         setupWebView()
         startLoad()
     }
@@ -163,6 +172,7 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort          = true
             loadWithOverviewMode     = true
             cacheMode                = WebSettings.LOAD_DEFAULT
+            setGeolocationEnabled(true)
         }
 
         webView.webViewClient = object : WebViewClient() {
@@ -212,6 +222,13 @@ class MainActivity : AppCompatActivity() {
 
             override fun onPermissionRequest(request: PermissionRequest?) {
                 request?.grant(request.resources)
+            }
+
+            override fun onGeolocationPermissionsShowPrompt(
+                origin: String,
+                callback: GeolocationPermissions.Callback
+            ) {
+                callback.invoke(origin, true, false)
             }
         }
     }

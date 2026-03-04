@@ -24,7 +24,10 @@
         android:background="@drawable/bg_loading"
         android:gravity="center"
         android:orientation="vertical"
-        android:padding="32dp">
+        android:paddingTop="112dp"
+        android:paddingStart="32dp"
+        android:paddingEnd="32dp"
+        android:paddingBottom="32dp">
 
         <TextView
             android:id="@+id/icon_joystick"
