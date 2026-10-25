@@ -1,0 +1,63 @@
+name: Build APK
+
+on:
+  push:
+    branches: [main, api36-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # ubuntu-24.04 runners ship the Android SDK; just add the API 36 platform
+      - name: Install Android SDK packages
+        run: |
+          set -o pipefail
+          SDKM="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-36" "build-tools;36.0.0" 2>&1 | tail -5 \
+            || { echo "::error title=sdkmanager::failed to install API 36 platform"; exit 1; }
+
+      - name: Build debug APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon assembleDebug > build.log 2>&1 || {
+            grep -E "What went wrong|error:|e: |Could not|FAILURE|> " build.log | head -25 | while IFS= read -r line; do
+              echo "::error title=gradle::$line"
+            done
+            tail -60 build.log
+            exit 1
+          }
+          tail -5 build.log
+
+      - name: Rename APK
+        run: |
+          mkdir -p out
+          cp app/build/outputs/apk/debug/*.apk out/RetroPricer-v2.0-debug.apk
+          ls -la out
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RetroPricer-debug-apk
+          path: out/RetroPricer-v2.0-debug.apk
+
+      - name: Publish to a pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v2.0-debug-${{ github.run_number }}"
+          gh release create "$TAG" out/RetroPricer-v2.0-debug.apk \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" \
+            --title "RetroPricer v2.0 debug build ${{ github.run_number }}" --prerelease \
+            --notes "Debug build of ${{ github.sha }}. Sideload only; not for the Play Store."
