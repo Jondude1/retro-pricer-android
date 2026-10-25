@@ -19,6 +19,7 @@ import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -48,11 +49,11 @@ class MainActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
 
     // After TIMEOUT_MS, show "Taking longer than usual..." message + retry button
-    private val TIMEOUT_MS = 20_000L
+    private val TIMEOUT_MS = 30_000L
 
     private val timeoutRunnable = Runnable {
         if (!pageLoaded) {
-            loadingStatus.text = "Server is waking up… this can take a minute."
+            loadingStatus.text = "Taking longer than usual… check your connection."
             btnRetry.visibility = View.VISIBLE
         }
     }
@@ -63,10 +64,6 @@ class MainActivity : AppCompatActivity() {
     ) { granted ->
         if (!granted) Toast.makeText(this, "Camera permission needed for game scanning", Toast.LENGTH_SHORT).show()
     }
-
-    private val requestLocationPermission = registerForActivityResult(
-        ActivityResultContracts.RequestPermission()
-    ) { /* WebView geolocation callback handles the result */ }
 
     // ── File chooser launcher (handles camera + gallery) ──────────────────
     private val fileChooserLauncher = registerForActivityResult(
@@ -121,10 +118,16 @@ class MainActivity : AppCompatActivity() {
             requestCameraPermission.launch(Manifest.permission.CAMERA)
         }
 
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
-            != PackageManager.PERMISSION_GRANTED) {
-            requestLocationPermission.launch(Manifest.permission.ACCESS_FINE_LOCATION)
-        }
+        // Predictive back (default when targeting API 36): onBackPressed() is no longer called
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) webView.goBack()
+                else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         setupWebView()
         startLoad()
@@ -172,10 +175,21 @@ class MainActivity : AppCompatActivity() {
             useWideViewPort          = true
             loadWithOverviewMode     = true
             cacheMode                = WebSettings.LOAD_DEFAULT
-            setGeolocationEnabled(true)
         }
 
         webView.webViewClient = object : WebViewClient() {
+            // Keep the app's own pages in the WebView; open eBay, PriceCharting etc. in the browser
+            override fun shouldOverrideUrlLoading(view: WebView?, request: WebResourceRequest?): Boolean {
+                val url = request?.url ?: return false
+                if (url.host == Uri.parse(APP_URL).host) return false
+                return try {
+                    startActivity(Intent(Intent.ACTION_VIEW, url))
+                    true
+                } catch (e: Exception) {
+                    false
+                }
+            }
+
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 // Only hide overlay if the page actually loaded content (not a blank/error page)
@@ -221,14 +235,8 @@ class MainActivity : AppCompatActivity() {
             }
 
             override fun onPermissionRequest(request: PermissionRequest?) {
-                request?.grant(request.resources)
-            }
-
-            override fun onGeolocationPermissionsShowPrompt(
-                origin: String,
-                callback: GeolocationPermissions.Callback
-            ) {
-                callback.invoke(origin, true, false)
+                // The web app only uses file inputs, never getUserMedia
+                request?.deny()
             }
         }
     }
@@ -236,7 +244,7 @@ class MainActivity : AppCompatActivity() {
     private fun buildCameraIntent(): Intent? {
         return try {
             val photoFile = createImageFile()
-            val uri = FileProvider.getUriForFile(this, "com.retropricer.fileprovider", photoFile)
+            val uri = FileProvider.getUriForFile(this, "$packageName.fileprovider", photoFile)
             cameraImageUri = uri
             Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
                 putExtra(MediaStore.EXTRA_OUTPUT, uri)
@@ -250,11 +258,6 @@ class MainActivity : AppCompatActivity() {
         val ts = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val dir = getExternalFilesDir(Environment.DIRECTORY_PICTURES)
         return File.createTempFile("GAME_${ts}_", ".jpg", dir)
-    }
-
-    override fun onBackPressed() {
-        if (webView.canGoBack()) webView.goBack()
-        else super.onBackPressed()
     }
 
     companion object {
